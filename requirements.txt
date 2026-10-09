@@ -9,3 +9,6 @@ python-dotenv
 email-validator
 pytest
 httpx
+langchain
+langchain-core
+langchain-openai
