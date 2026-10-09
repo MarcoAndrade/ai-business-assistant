@@ -1,17 +1,41 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.sale import SaleResponse
+from app.schemas.sale import SaleCreate, SaleResponse
+from app.services.exceptions import (
+    CustomerNotFoundError,
+    InactiveProductError,
+    InsufficientStockError,
+    ProductNotFoundError,
+)
 from app.services.sale_service import SaleService
 
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+@router.post(
+    "",
+    response_model=SaleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_sale(data: SaleCreate, db: DbSession):
+    try:
+        return SaleService(db).create(data)
+    except ProductNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CustomerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InactiveProductError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InsufficientStockError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("", response_model=list[SaleResponse])
