@@ -96,6 +96,23 @@ class BusinessRequest(BaseModel):
                     "Fecha del reporte"
                 )
 
+        if self.intent in {"quote_sale", "register_sale"}:
+            if not self.items:
+                self.missing_information.append(
+                    "Al menos un producto"
+                )
+
+            for index, item in enumerate(self.items, start=1):
+                if item.product_id is None and not item.product_name:
+                    self.missing_information.append(
+                        f"Identificar el producto de la partida {index}"
+                    )
+
+                if item.quantity is None:
+                    self.missing_information.append(
+                        f"Cantidad de la partida {index}"
+                    )
+
         return self
 
 def validate_target_date(value: str | None) -> date | None:
