@@ -1,4 +1,3 @@
-
 from app.ai.graph_state import AssistantState
 from app.ai.structured_output import extract_business_request
 from app.ai.tools import (
@@ -11,20 +10,24 @@ from app.ai.tools import (
 def interpret_request(state: AssistantState) -> dict:
     message = state["user_message"].strip()
 
-    if not message or message.isspace():
+    if not message:
         return {
             "route": "clarification",
             "response": "Escribe una consulta para poder ayudarte.",
             "missing_information": ["Mensaje del usuario"],
         }
 
-    request = extract_business_request(message)
+    request = extract_business_request(
+        message,
+        conversation_history=state.get("conversation_history", []),
+    )
 
     return {
         "request": request.model_dump(mode="json"),
         "intent": request.intent,
         "missing_information": request.missing_information,
     }
+
 
 def route_request(state: AssistantState) -> dict:
     request = state.get("request", {})

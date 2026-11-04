@@ -5,7 +5,6 @@ from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
-from app.ai.graph import assistant_graph
 from app.telegram_bot.security import authorize_user
 
 
@@ -13,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 MAX_TELEGRAM_MESSAGE_LENGTH = 4000
 
+def get_thread_id(user_id: int, chat_id: int) -> str:
+    return f"telegram:user:{user_id}:chat:{chat_id}"
 
 async def start_command(
     update: Update,
@@ -85,21 +86,65 @@ async def handle_text_message(
         return
 
     try:
-        await context.bot.send_chat_action(
-            chat_id=message.chat_id,
-            action=ChatAction.TYPING,
+        user = update.effective_user
+
+        if user is None or message.chat.type != "private":
+            await message.reply_text(
+                "Por ahora solo admito conversaciones privadas."
+            )
+            return
+
+        graph = context.application.bot_data["assistant_graph"]
+
+        config = {
+            "configurable": {
+                "thread_id": get_thread_id(
+                    user.id,
+                    message.chat_id,
+                )
+            }
+        }
+
+        # Recuperar el historial guardado por el grafo.
+        snapshot = await asyncio.to_thread(
+            graph.get_state,
+            config,
         )
 
-        # LangGraph y sus tools son síncronos en esta implementación.
-        # Ejecutarlos en un hilo evita bloquear el event loop de Telegram.
+        history = []
+
+        if snapshot and snapshot.values:
+            history = snapshot.values.get(
+                "conversation_history",
+                [],
+            )
+
         result = await asyncio.to_thread(
-            assistant_graph.invoke,
-            {"user_message": user_message},
+            graph.invoke,
+            {
+                "user_message": user_message,
+                "conversation_history": history,
+            },
+            config,
         )
 
         response = result.get(
             "response",
             "No pude generar una respuesta para esa solicitud.",
+        )
+
+        # Guardar el turno actual en el estado persistido.
+        updated_history = history + [
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": response},
+        ]
+
+        await asyncio.to_thread(
+            graph.update_state,
+            config,
+            {
+                "conversation_history": updated_history[-10:]
+            },
         )
 
         for start in range(0, len(response), MAX_TELEGRAM_MESSAGE_LENGTH):

@@ -1,4 +1,3 @@
-
 import json
 import os
 from dotenv import load_dotenv
@@ -17,6 +16,9 @@ llm = ChatOpenAI(
     temperature=0,
 )
 
+structured_llm = llm.with_structured_output(
+    BusinessRequest
+)
 
 SYSTEM_PROMPT = """
 Eres un extractor de solicitudes para un asistente de negocios.
@@ -61,30 +63,42 @@ Reglas:
     usuario lo especifica. No inventes un umbral si no lo menciona.
 """
 
+def extract_business_request(
+    message: str,
+    conversation_history: list[dict[str, str]] | None = None,
+) -> BusinessRequest:
 
-def extract_business_request(message: str) -> BusinessRequest:
-    response = llm.invoke(
-        [
-            ("system", SYSTEM_PROMPT),
-            ("human", message),
-        ]
-    )
+    history = conversation_history or []
 
-    content = response.content
+    context_lines = []
 
-    if not isinstance(content, str) or not content.strip():
-        raise ValueError("El modelo devolvió una respuesta vacía.")
+    for item in history[-8:]:
+        role = item.get("role")
+        content = item.get("content", "")
 
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"El modelo no devolvió JSON válido: {content!r}"
-        ) from exc
+        if role in {"user", "assistant"} and content:
+            context_lines.append(f"{role}: {content}")
 
-    try:
-        return BusinessRequest.model_validate(data)
-    except ValidationError as exc:
-        raise ValueError(
-            f"El JSON no cumple el esquema BusinessRequest: {exc}"
-        ) from exc
+    contextual_prompt = SYSTEM_PROMPT
+
+    if context_lines:
+        contextual_prompt += (
+            "\n\nHistorial reciente:\n"
+            + "\n".join(context_lines)
+            + "\n\nUsa el historial únicamente para resolver "
+            "referencias conversacionales. "
+            "No lo consideres fuente de datos comerciales actuales."
+        )
+
+    response = structured_llm.invoke([
+        ("system", contextual_prompt),
+        ("human", message),
+    ])
+
+    if not isinstance(response, BusinessRequest):
+        raise TypeError(
+            "Se esperaba BusinessRequest, "
+            f"pero se recibió {type(response).__name__}"
+        )
+
+    return response

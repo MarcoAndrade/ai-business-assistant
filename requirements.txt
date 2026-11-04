@@ -13,4 +13,6 @@ langchain
 langchain-core
 langchain-openai
 langgraph
+langgraph-checkpoint-redis
 python-telegram-bot>=22,<23
+redis

@@ -21,3 +21,6 @@ class AssistantState(TypedDict, total=False):
 
     # Metadatos para trazabilidad
     error_code: str | None
+
+    # Historial acotado de la conversación
+    conversation_history: list[dict[str, str]]

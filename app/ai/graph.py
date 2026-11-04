@@ -19,7 +19,7 @@ def select_route(state: AssistantState) -> str:
     return state["route"]
 
 
-def build_graph():
+def build_graph(checkpointer=None):
     graph = StateGraph(AssistantState)
 
     graph.add_node("interpret", interpret_request)
@@ -64,7 +64,7 @@ def build_graph():
     graph.add_edge("format_result", END)
     graph.add_edge("tool_error", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
 assistant_graph = build_graph()
